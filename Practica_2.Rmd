@@ -1,0 +1,1855 @@
+---
+title: "Práctica 2; Tipología y ciclo de vida de los datos."
+author: "Pablo Chillerón Beviá, Evgeny Muzarev Gevorgian"
+date: "12/20/2021"
+output: 
+  html_document:
+    highlight: default
+    number_sections: yes
+    theme: cosmo
+    toc: yes
+    toc_depth: 3
+  word_document: default
+  pdf_document:
+    highlight: zenburn
+    toc: yes
+---
+
+
+
+
+
+```{r message= FALSE, warning=FALSE, echo=FALSE}
+
+
+if (!require('dplyr')) install.packages('dplyr', dependencies = TRUE);library(dplyr)
+
+if (!require('ggplot2')) install.packages('ggplot2', dependencies = TRUE);library(ggplot2)
+
+if (!require('reshape2')) install.packages('reshape2', dependencies = TRUE);library(reshape2)
+
+if (!require('ggpubr')) install.packages('ggpubr', dependencies = TRUE);library(ggpubr)
+
+if (!require('faraway')) install.packages('faraway', dependencies = TRUE);library(faraway)
+
+if (!require('cowplot')) install.packages('cowplot', dependencies = TRUE);library(cowplot)
+
+if (!require('corrplot')) install.packages('corrplot', dependencies = TRUE);library(corrplot)
+
+if (!require('PerformanceAnalytics')) install.packages('PerformanceAnalytics', dependencies = TRUE);library(PerformanceAnalytics)
+
+
+```
+
+
+# Descripción del dataset. ¿Por qué es importante y qué pregunta/problma pretende responder?
+
+
+El dataset que hemos seleccionado para realizar esta práctica, se titula Epicurious - Recipes with Rating and Nutrition, Recipes from Epicurious by rating, nutritional content, and categories. Este dataset ha sido subido a Kaggle por el usuario HugoDarwood y su visibilidad es pública.
+
+En él, encontramos más de 20.000 registros que representan recetas, conteniendo no solo ingredientes y otros atributos relevantes en cuanto a la alimentación, sino también características tanto de fecha, como de lugar, como de modo de cocina, etc.
+
+Desde el punto de vista del análisis, es un dataset muy completo, ya que podemos hacer análisis estadístico básico de muchos tipos. Además, se presta para cualquier tipo de modelo, tanto supervisado como no supervisado, ya que, por ejemplo, se pueden agrupar los registros como desayunos, comidas y cenas, también como platos de carne o pescado, dulces o salados, etc.
+
+Vamos a continuación a definir un contexto para esta práctica y por qué este dataset es adecuado para ello:
+
+Estamos pensando en abrir un nuevo restaurante vegetariano en una zona activa de restauración de la ciudad. Pensamos que es una buena ocasión dado el aumento de consumidores en los últimos años y la poca oferta de la zona. Dado que nosotros no somos consumidores vegetarianos, tenemos interés en conocer la realidad de ciertos mitos sobre este tipo de alimentación, como por ejemplo:
+
+1.Es más baja en grasas
+
+2.Es mucho más saludable
+
+3.Es muy baja en proteínas.
+
+Por otro lado, nos interesa saber si existe alguna relación entre los valores nutritivos como las calorías, las proteínas, las grasas y el sodio, así como la posibilidad de predecir cuántas calorías tendría un plato a partir del resto de valores de los demás valores nutritivos.
+
+El objetivo es conocer qué hay de cierto en estas afirmaciones e intereses a partir de este dataset, ya que es una gran representación de la comida de todo el mundo, lo cual permite comparar ciertos atributos entre grupos (vegetariano o no). Para ello, lo transformaremos hasta obtener un nuevo dataset con los atributos necesarios para realizar estos análisis, puesto que existen cientos de atributos que representan ingredientes. En este análisis, sólo será necesario en algunos de ellos.
+
+Este es el link al dataset: https://www.kaggle.com/hugodarwood/epirecipes
+
+
+# INTEGRACIÓN Y SELECCIÓN DE LOS DATOS A UTILIZAR
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+# Carga del dataset
+data <- read.csv("~/Desktop/UOC/Tipología y ciclo de vida de los datos/Práctica 2/epi_r.csv")
+  
+```
+
+
+
+Analizamos el dataset
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+n_filas     <- dim(data)[1]
+n_variables <- dim(data)[2]
+sprintf("Hay %d registros y %d atributos", n_filas, n_variables)
+  
+
+```
+
+
+
+Creamos el subconjunto del dataset que vamos a necesitar
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <- data[,1:6]
+subdata[7] <- data[273]
+subdata[8] <- data[643]
+
+rm(data)
+
+
+str(subdata)
+
+```
+
+
+# LIMPIEZA DE LOS DATOS
+
+
+
+
+
+Antes que nada, eliminemos los duplicados
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <-distinct(subdata)
+d = dim(data)[1]-dim(subdata)[1]
+sprintf("Existían %d registros duplicados que han sido eliminados", d)
+
+
+```
+
+
+¿Los datos contienen ceros o elementos vacíos? ¿Cómo gestionarlos?
+
+
+Analicemos los atributos en grupos de variables
+
+
+## rating
+
+
+¿Existen valores indeterminados?
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+rating.nas <- filter(subdata, is.na(rating))
+sprintf("Existen %d registros no identificados en la columna rating", dim(rating.nas)[1])
+  
+```
+
+
+
+
+Por lo que no existen valores sin identificar, veamos ahora cómo se distribuyen 
+sus valores por si tiene ceros y si los tiene, cómo tratarlos.
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+summary(subdata$rating)
+
+```
+
+
+Observamos que todos los valores están entre 0 y 5, siendo 0 la puntuación más 
+baja que representa poca popularidad, y 5 el máximo valor y por tanto la mejor 
+puntuación. El significado de los ceros en este atributo ofrece mucha información 
+y no debe ser tratado de ninguna manera. Además, no existen outliers en este 
+atributo, hecho que viene determinado por la naturaleza del atributo.
+
+## calories, protein, fat, sodium
+  
+  
+Analicemos estas variables mediante summary.
+
+
+```{r message= FALSE, warning=FALSE}
+
+summary(subdata[,3:6])
+
+```
+
+
+
+A simple vista, ya tenemos claro que existen miles de valores indeterminados en 
+estas variables. Veamos cuántos de ellos lo están a la vez en los 4 atributos:
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata.nas <- filter(subdata, is.na(calories), 
+                      is.na(protein), is.na(fat), is.na(sodium))
+sprintf("Existen %d registros no identificados a la vez en las columnas calories, protein, fat y sodium", dim(subdata.nas)[1])
+
+```
+
+
+
+
+Esta gran cantidad de registros, nos puede arruinar gratuitamente el análisis del 
+problema. Dado que tenemos una muestra muy grande, vamos a eliminar estos 
+registros no identificados, ya que su indeterminación no nos proporciona ningún 
+beneficio, y sí nos interfiere en los análisis. Bastará con eliminar aquellos 
+valores en los que calories es no determinado, ya que existen el mismo número de 
+registros indeterminados en calories que en todos los demás incluyendo calories.
+  
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <- subdata[!is.na(subdata$calories),]
+
+
+```
+
+
+
+Veamos cómo queda en cuanto a NAs el dataset por columna ahora:
+  
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+colSums(is.na(subdata[,3:6]))
+
+```
+
+
+
+Dado que solamente tenemos un valor indeterminado en el atributo sodium, vamos a 
+estudiarlo particularmente:
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+sodium.na <- filter(subdata, is.na(sodium))
+sodium.na
+
+```
+
+
+
+Se trata de To Toast and Skin Hazelnuts. Para decidir sobre esta indeterminación,
+vamos a analizar registros similares a este:
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+sodium.neighbours <- filter(subdata,calories == 4, protein == 0, fat == 0)
+sodium.neighbours
+
+```
+
+
+
+Tal y como podemos comprobar, no es una tarea fácil tomar la decisión sobre este 
+registro en particular, ya que no existe un patrón sobre la cantidad de sodio en 
+los vecinos. Eliminamos pues este registro como hemos hecho con el resto. Al fin 
+y al cabo, es solamente uno entre miles de registros que nos puede dar muchos 
+problemas.
+  
+  
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <- subdata[!is.na(subdata$sodium),]
+
+```
+
+
+
+Nos quedan aún ver los registros NAs en los atributos protein y fat. Veamos los 
+de protein:
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+protein.na <- filter(subdata,is.na(protein))
+protein.na
+
+```
+
+
+
+Es decir, existen aún 28 registros de los 31 de protein y 51 de fat que están 
+indeterminados a la vez. Dado que son muchos en común, pero pocos en relación al 
+volumen total, los vamos a eliminar:
+  
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <- subdata[!is.na(subdata$protein),]
+
+```
+
+
+Analicemos ahora los NAs que quedan en el atributo fat
+
+
+```{r message= FALSE, warning=FALSE}
+
+fat.na <- filter(subdata,is.na(fat))
+fat.na
+
+```
+
+
+Ojo, porque en este caso, todos los valores indeterminados de fat, tienen algún 
+patrón común, y es que su valor de protein también es 0 (salvo un registro que 
+tiene valor 6), y muchos de ellos tienen rating 0. Puede ser un conjunto de datos 
+importante para tomar decisiones, por lo que vamos a sustuir los NAs por 0. El 
+resto de valores nutritivos son bajos o nulos, por lo que parece conveniente 
+realizar este cambio:
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata$fat[is.na(subdata$fat)] = 0
+
+```
+
+
+Comprobemos que hemos dejado estos cuatro atributos limpios y listos para 
+continuar:
+
+
+```{r message= FALSE, warning=FALSE}
+
+colSums(is.na(subdata[,3:6]))
+
+```
+
+
+## healthy y vegetarian
+  
+  
+Estos atributos, aparentemente, son atributos binarios y no tienen registros 
+indeterminados.
+
+
+Comprobémoslo:
+  
+
+```{r message= FALSE, warning=FALSE}
+
+min = min(subdata[,7:8])
+max = max(subdata[,7:8])
+sprintf("El mínimo es %d y el máximo es %d", min, max)
+sprintf("Estos atributos contienen %d valores vacíos", sum(colSums(is.na(subdata[,7:8]))))
+
+```
+
+
+Esto determina que son valores entre 0 y 1 sin elementos indeterminados, pero 
+vamos a ver que solamente toman valores 0 y 1:
+
+
+```{r message= FALSE, warning=FALSE}
+
+hceros <- sum(subdata$healthy == 0)
+hunos <- sum(subdata$healthy == 1)
+sprintf("En healthy, existen %d registros que no son ni 1 ni 0", hceros + hunos - dim(subdata)[1])
+vceros <- sum(subdata$vegetarian == 0)
+vunos <- sum(subdata$vegetarian == 1)
+sprintf("En vegetarian, existen %d registros que no son ni 1 ni 0", vceros + vunos - dim(subdata)[1])
+
+```
+
+
+
+Identificación y tratamiento de valores extremos
+
+
+Veamos cómo están distribuidos los datos de nuestro dataset:
+
+
+```{r message= FALSE, warning=FALSE}
+
+summary(subdata)
+
+```
+
+
+Observamos que, en rating, no tenemos outliers, y todos los valores están entre 
+0 y 5. Tampoco tenemos problemas en los atributos healthy y vegetarian, donde 
+todos los valores son binarios. Sin embargo, los atributos calories, protein, 
+fat y sodium tienen valores desproporcionados como máximo. Esto, desvirtúa, todos 
+los estadísticos básicos y, en consecuencia, estropea cualquier análisis que 
+podríamos realizar al respecto.
+  
+Observemos con gráficos boxplot cómo se distribuyen los outliers de estos
+atributos.
+
+
+```{r message= FALSE, warning=FALSE}
+
+boxplot((subdata[,3:6]))
+
+```
+
+
+En efecto, nos aparecen unos elementos muy particulares que debemos analizar y 
+valorar si tenemos que transformarlos o eliminarlos. Tomaremos como valores 
+completamente anómalos, aquellos valores 3 veces más altos que su tercer 
+cuartil:
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+outl1 <- filter(subdata[,3:6], calories > 3*quantile(subdata$calories)[4], 
+                protein > 3*quantile(subdata$protein)[4],
+                fat > 3*quantile(subdata$fat)[4], 
+                sodium  > 3*quantile(subdata$sodium)[4])
+outl1
+sprintf("Se observan %d registros más allá de tres veces su tercer cuartil", dim(outl1)[1])
+
+```
+
+
+A priori, cabe pensar que algunos registros simplemente están en otra escala, es
+decir, que probablemente están en calorías (y no en kilocalorías), pero no 
+tenemos una referencia que nos haga pensar que eso es así. Más aún, existen 
+registros donde mientras algunos registros tienen valores aceptables, en otros 
+atributos  observamos valores claramente erróneos. Vamos a eliminarlos y más 
+tarde volveremos a representar los boxplots:
+
+
+```{r message= FALSE, warning=FALSE}
+subdata2 <- subdata
+
+subdata <- filter(subdata, calories <= 3*quantile(subdata$calories)[4], 
+                  protein <= 3*quantile(subdata$protein)[4],
+                  fat <= 3*quantile(subdata$fat)[4], 
+                  sodium <= 3*quantile(subdata$sodium)[4])
+
+boxplot(subdata$calories)
+boxplot(subdata$protein)
+boxplot(subdata$fat)
+boxplot((subdata$sodium))
+
+
+```
+
+
+Observamos que aún existen muchísimos outliers alejados de la caja en todos los
+atributos, aunque no hay valores alejados de lo que puede representar un error 
+en la recogida de datos evidente. Esto probablemente identifica registros de 
+comida no saludable que vamos a mantener, ya que tiene un interés en el análisis  
+que vamos a realizar.
+  
+Por último, vamos a discretizar el atributo rating, ya que nos va a ayudar en el 
+análisis para agrupar la popularidad de los registros:
+
+
+```{r message= FALSE, warning=FALSE}
+
+disc_rating <- cut(subdata$rating, breaks = c(-0.01,1,3,4.3,4.99,5.01), 
+                   labels = c("very poor","poor", "average", "good", "excellent"))
+
+```
+
+
+Añadimos esta columna al dataset
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <- cbind(subdata, disc_rating)
+
+```
+
+
+
+Eliminamos la columna que contiene el dato numérico, ya que no nos hace falta
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata <- subdata[,c(1,3:9)]
+
+```
+
+
+
+Veamos un resumen de cómo se distribuyen los datos en el dataframe resultante:
+
+
+```{r message= FALSE, warning=FALSE}
+
+summary(subdata)
+
+```
+
+
+
+
+# ANÁLISIS DE DATOS.
+
+
+## Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar).
+
+Dadas nuestras preguntas a responder, vamos a necesitar agrupar nuestros 
+atributos categóricos dependiendo de sus valores.
+
+  
+GRUPO 1: Atributo vegetarian
+
+
+Dividiremos los valores entre los que son recetas vegetarianas o no lo son:
+
+```{r message= FALSE, warning=FALSE}
+
+veg.si <- subdata[subdata$vegetarian == 1,]
+veg.no <- subdata[subdata$vegetarian == 0,]
+
+```
+
+GRUPO 2: Atributo disc_rating
+
+
+Dividiremos los valores entre los que son excelentes o buenos (populares) y los 
+que no lo son:
+
+```{r message= FALSE, warning=FALSE}
+
+pop.si <- subdata[subdata$disc_rating == "excelent" | subdata$disc_rating == "good" ,]
+pop.no <- subdata[subdata$disc_rating == "very poor" | subdata$disc_rating == "poor" | 
+                    subdata$disc_rating == "average" ,]
+
+```
+
+
+
+## Comprobación de la normalidad y homogeneidad de la varianza.
+
+
+Antes que nada, vamos a realizar una inspección visual de las distribuciones de
+las cuatro variables continuas: protein, calories, fat y sodium.
+
+Primero vamos a utilizar el conjunto de datos original, el que contiene los 
+outliers.
+
+```{r message= FALSE, warning=FALSE}
+
+myplots <- list()
+i <- 1
+for (col in names(subdata2[,3:6])){
+  myplots[[i]] <- ggplot(data = subdata2, aes(x = subdata2[[col]])) +
+                  geom_histogram(aes(y = ..density.., fill = ..count..)) +
+                  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+                  stat_function(fun = dnorm, colour = "firebrick",
+                        args = list(mean = mean(subdata2[[col]]),
+                                    sd = sd(subdata2[[col]])))+ggtitle(col)
+  i <- i+1
+}
+
+subdata3 <- subdata
+  
+plot_grid(plotlist = myplots)  
+  
+
+
+
+```
+
+
+Vemos que las cuatro variables contienen outliers que sesgan la distribución muy
+a la derecha.
+
+
+Vamos a visualizar el conjunto de datos sin los outliers.
+
+
+```{r message= FALSE, warning=FALSE}
+
+myplots <- list()
+i <- 1
+for (col in names(subdata[,3:6])){
+  myplots[[i]] <- ggplot(data = subdata, aes(x = subdata[[col]])) +
+                  geom_histogram(aes(y = ..density.., fill = ..count..)) +
+                  scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+                  stat_function(fun = dnorm, colour = "firebrick",
+                        args = list(mean = mean(subdata[[col]]),
+                                    sd = sd(subdata[[col]])))+ggtitle(col)
+  i <- i+1
+}
+
+  
+plot_grid(plotlist = myplots)  
+  
+
+
+
+```
+
+
+Las distribuciones de las variables sin los outliers siguen teniendo un sesgo
+muy grande a la derecha, con lo cual, aunque también vamos a hacer los tests de 
+normalidad, ya a simple vista podemos ver que las cuatro variables no están 
+distribuidas normalmente.
+
+
+Lo siguiente que vamos a intentar hacer es aplicar las transformaciones.
+
+La cola grande a la derecha nos sugiere aplicar la transformación logarítmica,
+ya que lo que hace la aplicación del logaritmo es contraer valores grandes(los 
+que están a la derecha de la cola) y expandir los valores pequeños. De esta 
+manera intentamos "centrar" la campana de la curva, quitando el sesgo derecho y
+añadiendo el izquierdo.
+
+
+Ya que las variables contienen muchos registros de 0s, nos vemos obligados a 
+añadir una pequeña constante a los 0s, para tratar log(0) que da valores "inf".
+
+
+```{r message= FALSE, warning=FALSE}
+
+# Declaramos la función de la transformación logarítmica
+log_trans <- function(x){
+  return(log(x+0.001))
+}
+
+# Declaramos la función de la transformación de raíz cuadrada
+square_trans <- function(x){
+  return(sqrt(x))
+}
+
+# Declaramos la función de la transformación inversa
+inv_trans <- function(x){
+  return(1/(x+0.001))
+}
+
+# Declaramos la propia función de transformación trans(df, func), donde
+# df es el dataframe y func es la función de transformación que hay que
+# aplicar a las columnas 'calories', 'protein', 'fat' y 'sodium'. 
+# La función devuelve una lista de gráficos(objetos ggplot) que vamos
+# a graficar en forma de grid.
+trans <- function(df, func){
+  myplots <- list()
+  i <- 1
+  if(deparse(substitute(df))=="subdata2"){
+    for (col in names(df[,3:6])){
+      myplots[[i]] <- ggplot(data = df, aes(x = func(df[[col]]))) +
+                      geom_histogram(aes(y = ..density.., fill = ..count..)) +
+                      scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+                      stat_function(fun = dnorm, colour = "firebrick",
+                            args = list(mean = mean(func(df[[col]])),
+                                        sd = sd(func(df[[col]]))))+ggtitle(col)
+      i <- i+1
+     }
+  } else{
+    for (col in names(df[,2:5])){
+      myplots[[i]] <- ggplot(data = df, aes(x = func(df[[col]]))) +
+                      geom_histogram(aes(y = ..density.., fill = ..count..)) +
+                      scale_fill_gradient(low = "#DCDCDC", high = "#7C7C7C") +
+                      stat_function(fun = dnorm, colour = "firebrick",
+                            args = list(mean = mean(func(df[[col]])),
+                                        sd = sd(func(df[[col]]))))+ggtitle(col)
+      i <- i+1
+    }
+  }
+  
+  return(myplots)
+}
+
+# Graficamos las 4 variables transformadas
+plot_grid(plotlist=trans(subdata2, log_trans))
+
+
+```
+
+
+Vemos que con la aplicación de la transformación logarítmica al conjunto de 
+datos con los outliers, conseguimos aproximar las curvas de las variables 
+calories y sodium a la normal, al menos visualmente, mientras que las otras
+dos variables protein y fat, siguen teniendo sesgo a la derecha, aunque ya no
+tan grande.
+
+
+Vamos a ver qué tal nos quedan las variables sin los outliers.
+
+
+```{r message= FALSE, warning=FALSE}
+
+plot_grid(plotlist=trans(subdata, log_trans))
+
+```
+
+
+Vemos que después de eliminar los outliers, la aplicación del logaritmo
+ya no es lo más adecuado, ya que, de tener el sesgo a la derecha, por haber 
+eliminado los outliers, ahora tenemos un sesgo a la izquierda. 
+
+A modo de ejemplo, vamos a aplicar a los datos que no contienen los outliers, en 
+lugar de la transformación logarítmica, la transformación de raíz cuadrada 
+$\sqrt{x}$ y la inversa $\frac{1}{x+0.001}$ --> añadimos una pequeña constante 
+para evitar $\frac{1}{0}$.
+
+
+La transformación de $\sqrt{x}$:
+
+```{r message= FALSE, warning=FALSE}
+
+plot_grid(plotlist=trans(subdata, square_trans))
+
+```
+
+
+La transformación inversa $\frac{1}{x+0.001}$
+
+
+```{r message= FALSE, warning=FALSE}
+
+plot_grid(plotlist=trans(subdata, inv_trans))
+
+```
+
+Vemos que con ninguna de las transformaciones podemos aproximar las variables
+sin los aoutliers a la normal. Además, primero la eliminación de los outliers,
+luego las transformaciones hacen difícil la interpretación de los resultados de
+los tests y modelos. Con lo cual, de momento nos quedamos con el conjunto de
+datos original que contiene los outliers y le vamos a aplicar la transformación
+logarítmica, ya que con esta transformación hemos podido aproximar al máximo al
+menos dos de las cuatro variables. Vamos a recordar como son:
+
+
+```{r message= FALSE, warning=FALSE}
+
+plot_grid(plotlist=trans(subdata2, log_trans))
+
+```
+
+
+Vemos que tanto la variable 'calories' como la 'sodium', aparentemente se han
+aproximado a la normal. Vamos a realizar los tests de normalidad para comprobar
+si realmente hemos conseguido "normalizar" al menos dos estas variables.
+
+
+Utilizaremos el test de Kolmogorov-Smirnov, asumiendo como hipótesis nula que la 
+población del atributo sigue una distribución normal. Para ello, comprobaremos 
+que el p-valor es mayor que el nivel de significancia 0.05.
+
+
+Calories:
+
+```{r message= FALSE, warning=FALSE}
+
+ks.test(log_trans(subdata2$calories), pnorm, mean(log_trans(subdata2$calories)), 
+        sd(log_trans(subdata2$calories)))
+
+```
+
+
+Protein:
+
+```{r message= FALSE, warning=FALSE}
+
+ks.test(log_trans(subdata2$protein), pnorm, mean(log_trans(subdata2$protein)), 
+        sd(log_trans(subdata2$protein)))
+
+```
+
+
+Fat:
+
+```{r message= FALSE, warning=FALSE}
+
+ks.test(log_trans(subdata2$fat), pnorm, mean(log_trans(subdata2$fat)), 
+        sd(log_trans(subdata2$fat)))
+
+```
+
+
+Sodium:
+
+```{r message= FALSE, warning=FALSE}
+
+ks.test(log_trans(subdata2$sodium), pnorm, mean(log_trans(subdata2$sodium)), 
+        sd(log_trans(subdata2$sodium)))
+
+```
+
+
+
+Dado que el valor en cada una de ellas, es menor que 0.05, por lo que rechazamos 
+la hipótesis nula, es decir, ninguna de las 4 variables numéricas se distribuye 
+normalmente. Igualmente, de acuerdo al Teorema Central del Límite, dado que 
+tenemos un número de registros suficientemente grande, podemos asegurar que la 
+media muestral de cualquier conjunto de datos sí sigue una distribución normal de 
+media igual a la media de la población y varianza igual a la varianza de la 
+población dividida por el número de registros del dataset.
+
+Comprobemos ahora la homogeneidad de la varianza. Para ello no podríamos usar el 
+Test de Levene, ya que  el test de Kolmogorov-Smirnov nos ha rechazado fuertemente 
+la hipótesis de normalidad de los datos, por lo que usaremos una alternativa no 
+paramétrica: el test de Fligner-Killeen. La hipótesis nula nos dice que las 
+varianzas son homogéneas. Para ello, volveremos a tomar como referencia el p-valor
+0.05, rechazando la hipótesis nula si es menor que dicho valor.
+
+Calories vs Protein
+
+```{r message= FALSE, warning=FALSE}
+#fligner.test(calories ~ protein, data = subdata)
+fligner.test(log_trans(subdata2$calories), log_trans(subdata2$protein))
+
+```
+
+
+Calories vs Fat
+
+```{r message= FALSE, warning=FALSE}
+
+#fligner.test(calories ~ fat, data = subdata)
+
+fligner.test(log_trans(subdata2$calories), log_trans(subdata2$fat))
+
+
+```
+
+
+Calories vs Sodium
+
+```{r message= FALSE, warning=FALSE}
+
+#fligner.test(calories ~ sodium, data = subdata)
+fligner.test(log_trans(subdata2$calories), log_trans(subdata2$sodium))
+
+
+```
+
+
+Protein vs Fat
+
+```{r message= FALSE, warning=FALSE}
+
+#fligner.test(protein ~ fat, data = subdata)
+fligner.test(log_trans(subdata2$protein), log_trans(subdata2$fat))
+
+```
+
+
+
+Protein vs Sodium
+
+```{r message= FALSE, warning=FALSE}
+
+#fligner.test(protein ~ sodium, data = subdata)
+fligner.test(log_trans(subdata2$protein), log_trans(subdata2$sodium))
+
+```
+
+
+Fat vs Sodium
+
+```{r message= FALSE, warning=FALSE}
+
+#fligner.test(fat ~ sodium, data = subdata)
+fligner.test(log_trans(subdata2$fat), log_trans(subdata2$sodium))
+
+```
+
+
+
+De nuevo observamos que para cada par de atributos numéricos, ninguna de las 
+comparaciones de la varianza ha mantenido la hipótesis nula, por lo que no existe 
+homogeneidad entre las varianzas de los atributos numéricos.
+
+
+
+## Aplicación de pruebas estadísticas para comparar los grupos de datos.
+
+
+
+Dado que no hemos obtenido ni normalidad ni homocedasticidad en nuestros datos, 
+no podemos garantiza el éxito de las pruebas de contraste de tipo paramétrico, 
+aunque la muestra es muy grande y el Teorema Central del Límite nos ampara.
+
+
+¿La comida vegetariana es más baja en grasas y proteínas?
+
+
+Lo primero que podemos hacer es visualizar las medias de grasas y proteínas 
+para cada grupo.
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata$vegetarian <- ifelse(subdata$vegetarian==0, "non_vegetarian","vegetarian")
+
+
+ggboxplot(subdata, x = "vegetarian", y = "protein", 
+          color = "vegetarian", palette = c("#00AFBB", "#E7B800"),
+          ylab = "Protein", xlab = "Vegetarian", main = "Las medias de proteína para las recetas vegetarianas y no vegetarianas")
+
+```
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+ggboxplot(subdata, x = "vegetarian", y = "fat", 
+          color = "vegetarian", palette = c("#00AFBB", "#E7B800"),
+          ylab = "Grasas", xlab = "Vegetarian", main = "Las medias de grasas para las recetas vegetarianas y no vegetarianas")
+
+
+```
+
+Ya a simple vista podemos notar que de media, el contenido tanto de la proteína, 
+como de las grasas en las recetas vegetarianas es menor que en las recetas no
+vegetarianas.
+
+
+Usaremos un contraste de hipótesis de dos muestra sobre diferencia de muestras
+en ambos casos, tomando alpha como 0.05. Usaremos el test de t-student:
+
+
+```{r message= FALSE, warning=FALSE}
+
+grasasveg <- veg.si$fat
+grasasnoveg <- veg.no$fat
+
+t.test(grasasveg, grasasnoveg, alternative="less")
+
+
+```
+
+
+Obtenemos en este caso un p-valor menor que 0.05, por lo que rechazamos la 
+hipótesis nula. Esto quiere decir que la comida vegetariana tiene menos grasa, 
+aunque observando el valor de las medias, no es muy significativo.
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+wilcox.test(grasasveg, grasasnoveg, exact = F, alternative = "less")
+
+```
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+proteinveg <- veg.si$protein
+proteinnoveg <- veg.no$protein
+
+t.test(proteinveg, proteinnoveg, alternative="less")
+
+```
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+wilcox.test(proteinveg, proteinnoveg, exact = F, alternative = "less")
+
+```
+
+
+Obtenemos de nuevo un p-valor menor que 0.05, por lo que rechazamos la hipótesis 
+nula. Por tanto, los registros que son clasificados como vegetarianos tienen 
+menos proteínas. Si observamos los valores de las medias, observamos que la 
+diferencia es reseñable.
+
+
+¿La comida vegetariana está relacionada con lo saludable?
+
+
+Nos dedicaremos a realizar un análisis de correlación entre los atributos 
+vegetarian y healthy. Dado que las variables son binarias, usaremos el test del 
+chi-cuadrado para analizar si son variables dependientes  o independientes. Como 
+hipótesis nula, asumiremos que las variables son dependientes, tomando como alpha 
+el valor 0.05.
+
+
+```{r message= FALSE, warning=FALSE}
+
+chisq.test(subdata$healthy, subdata$vegetarian)
+
+```
+
+
+
+Dado que el p-valor es menor que 0.05, rechazaremos la hipótesis nula, y por 
+tanto, el test determina que el hecho de ser vegetariano, no implica ser 
+saludable. De hecho, si calculamos la correlación entre ambas variables:
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+subdata$vegetarian <- ifelse(subdata$vegetarian=="vegetarian", 1,0)
+
+cor(subdata$healthy, subdata$vegetarian)
+
+```
+
+
+Nos da un valor cercano a 0, que representa independencia entre variables.
+
+¿Existe alguna relación entre los valores nutritivos?
+
+Calculemos la matriz de correlación entre las variables calories, protein, fat y 
+sodium:
+
+
+```{r message= FALSE, warning=FALSE}
+
+cor(subdata[,2:5])
+
+```
+
+Se observa una alta correlación directa entre fat y calories. De otra manera, la
+variable que más afecta al aumento de calorías, es sin duda las grasas. En un 
+discreto lugar las proteínas y de manera indeterminada el contenido en sodio.
+
+
+¿Podemos predecir la cantidad de calorías que tendría una receta dados ciertos 
+valores de los demás atributos?
+
+Vamos a plantear dos modelos de regresión lineal, uno usando las variables 
+healthy y vegetarian y otro sin usarlas. Para determinar cuál es mejor, 
+calcularemos sus coeficientes de determinación
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+reg_lin_model1 <- lm(calories ~ protein + fat + sodium + healthy + vegetarian, data = subdata)
+reg_lin_model2 <- lm(calories ~ protein + fat + sodium, data = subdata)
+
+
+summary(reg_lin_model1)
+
+
+
+```
+
+
+Bueno pues, vemos que el $R^²$ es bastante alto, 0.79, el modelo en general es
+estadísticamente significante, ya que el p-valor es cercano a 0, cada una de las
+variables por separado también son estadísticamente importantes.
+
+Pero también podemos notar una cosa, que tiene mala pinta. Si nos fijamos en la
+distribución de los residuos, podemos ver la presencia de asimetría hacía la 
+derecha. Era algo de esperar, ya que ninguna de las variables(y sobre todo la
+de respuesta) siguen una distribución normal y aunque los supuestos del modelo
+de la regresión lineal no exigen que las variables tengan una distribución normal,
+sí que exige uno de los supuestos que los residuos tengan una distribución normal
+$\epsilon$~$N(0,\sigma^2)$
+
+Vamos a consultar el gráfico de los residuos vs valores estimados y también el
+gráfico Q-Q para los residuos.
+
+
+```{r message= FALSE, warning=FALSE}
+
+par(mfrow = c(2, 2))
+plot(reg_lin_model1)
+
+#cor(subdata[,3:7])
+
+
+```
+
+
+En el primer gráfico Residuals vs Fitted, podemos observar una cierta estructura
+o patrón en la nube de puntos, lo que ya nos quiere decir que la distribución de
+los residuos no es normal, de lo contrario, la nube de puntos no debería presentar
+ningún tipo de estructura. Luego, el gráfico Q-Q también nos confirma que la
+distribución de los residuos no es normal. 
+
+La no normalidad de los residuos quiere decir que el modelo lineal no es el más
+adecuado para describir el tipo de relación entre la variable dependiente(calories)
+y las independientes. Por lo tanto, este modelo no se puede usar para predicciones.
+
+Vamos a ver si aplicando la transformación log(x) a la variable de respuesta
+(calories) y de esta manera aproximándola a la normal, podemos conseguir algún
+cambio en la distribución de residuos.
+
+
+```{r message= FALSE, warning=FALSE}
+
+reg_lin_model1 <- lm(log_trans(calories) ~ protein + fat + sodium + healthy + vegetarian, data = subdata)
+
+summary(reg_lin_model1)
+
+```
+
+
+
+Ya vemos que con la aplicación de la transformación log(x) a la variable de 
+respuesta, hemos conseguido que la distribución de los residuos tenga una
+cierta simetría: Median está casi a 0 (0.0559), 1Q y 3Q -0.1785 y 0.3064 
+respectivamente, es decir hay cierta simetría.
+
+Vamos a volver a consultar los gráficos Residuals vs Fitted y Q-Q.
+
+```{r message= FALSE, warning=FALSE}
+
+par(mfrow = c(2, 2))
+plot(reg_lin_model1)
+
+```
+
+
+Pues no. Seguimos sin tener la distribución normal de residuos. Con lo cual,
+ya podemos descartar este modelo y tenemos que buscar alternativas no 
+paramétricas.
+
+
+Vamos ver el segundo modelo que no incorpora las variables 'healthy' y 'vegetarian'.
+
+
+```{r message= FALSE, warning=FALSE}
+
+summary(reg_lin_model2)
+
+```
+
+Pues aquí pasa lo mismo, no tenemos simetría en los residuos. Con lo cual, no
+tiene sentido proseguir con el modelo lineal.
+
+Lo que sí que está claro es que tenemos relaciones entre la variable de respuesta
+y las explicativas, pero estas relaciones no son lineales.
+
+
+Vamos a aplicar la regresión local (LOESS), que nos permite estimar la curva
+a partir de las regresiones lineales ponderadas simples, sobre un subconjunto de 
+datos locales para crear una función que mejor describe los datos.
+
+Se escoge una proporción de datos(llamada ventana), en la que a su vez también
+se escoge un punto "X" llamado punto focal, el cual servirá para estimar una
+regresión local ponderada. En el ajuste de la regresión sólo participan los 
+puntos del entorno(ventana) de "X". Las ponderaciones se asignan en función de la
+distancia de los puntos del punto focal "X". La mayor ponderación se asigna a 
+las observaciones que más cerca estén del punto "X" y conforme se aumenta la
+distancia, disminuyen las ponderaciones. Con lo cual, el punto con mayor 
+ponderación (el que más cerca está) tendrá el mayor efecto sobre el ajuste del
+modelo. Esto se basa en la idea de que los puntos más cercanos entre si es más
+probable que se relacionen de una manera sencilla respecto a los puntos que están
+más lejos. 
+
+Una vez estimada la regresión ponderada local, la ventana se desplaza al siguiente
+punto y se repite el proceso. Con todo esto lo que conseguimos es crear un
+polinomio que consta de estas "pequeñas" regresiones locales, con sus cambios
+de pendientes, curvaturas y etcétera, que mejor describe a los datos.
+
+Como ya se puede imaginar, la regresión LOESS requiere bastantes recursos 
+computacionales. Todavía más si tenemos que elegir los hiper-parámetros para
+ajustar el modelo óptimo. Nosotros vamos a necesitar 2 parámetros: span(el 
+tamaño de la ventana), que es una proporción que está en [0,1], y degree, que es
+el grado del polinomio. Por ejemplo, si establecemos span = 0.75 y degree = 1,
+quiere decir que el 75% de los datos participan en la ventana y que queremos
+el polinomio del grado 1.
+
+Vamos a crear dos loops for, que nos van a iterar por la secuencia de spans(
+tamaños de ventana) 0.15, 0.16, 0.17,...,0.98, 0.99, 1.00 y por la secuencia de
+degree 0, 1 y 2. Es decir, para cada degree vamos a tener 85 valores de span,
+85x3=255 modelos vamos a tener que ajustar, para elegir el mejor según el RMSE
+(root-mean-square error) - raíz del error cuadrático medio. 
+
+
+Como ya se puede entender, este proceso va a tardar. Además, nosotros vamos
+a utilizar los dos conjuntos de datos, el original con los outliers(subdata2) y
+sin los outliers(subdata). Por este motivo, los dos ciclos for van comentados.
+
+
+```{r message=FALSE, warning=FALSE}
+
+set.seed(2021)
+# Partimos el dataset en train y test
+train.row <- runif(n=nrow(subdata3)) < 0.7
+
+train <- subdata3[train.row,]
+valid <- subdata3[!train.row,]
+
+
+train.row2 <- runif(n=nrow(subdata2)) < 0.7
+
+train2 <- subdata2[train.row2,]
+valid2 <- subdata2[!train.row2,]
+
+
+# Definimos la función de la raíz del error cuadrático medio
+calc.RMSE <- function(pred, act){
+  sqrt(mean((pred-act)^2)/length(pred))
+}
+
+# Creamos una matriz para resultados
+results <- matrix(NA,0,4)
+colnames(results) <- c("span","degree","train.rmse","valid.rmse")
+
+
+# Para cada degree y span ajustamos el modelo y calculamos su RMSE y lo
+# introducimos a la matriz.
+### ¡ATENCIÓN! ¡Tarda en ejecutarse aproximadamente tres cuartos de hora!    ###
+################################################################################
+#for (degree in seq(0,2,1)) {
+#    for (span in seq(0.15,1,0.01)) {
+#      mod <- loess(calories ~ protein+fat+sodium, data = train2, degree = degree, 
+#                   span = span, normalize = T, 
+#                   control = loess.control(surface = "direct"))
+#      train.rmse <- calc.RMSE(mod$fitted, train2$calories)
+#      valid.rmse <- calc.RMSE(predict(mod, newdata = valid2), valid2$calories)
+#      
+#      results <- rbind(results,c(span, degree, train.rmse, valid.rmse))
+#      
+#    }
+#  }
+################################################################################
+
+
+
+
+
+
+
+#results <- as.data.frame(results)
+
+# Eligimos el modelo con el menor RMSE
+#best <- results[which.min(results$valid.rmse),]
+
+#results
+
+#best
+
+# subdata2 span = 0.15; degree = 1; train.rmse = 2.089149; valid.rmse = 4.027505
+
+# subdata span = 0.15; degree = 2; train.rmse = 1.203649; valid.rmse = 1.772531
+
+```
+
+
+Una vez terminados los dos procesos, ya tenemos los parámetros: tanto para el 
+conjunto original con los outliers(subdata2) como para el que no contiene los 
+outliers, el tamaño de la ventana es el mismo span = 0.15, es decir en cada 
+ventana participan 15% de los datos. Luego, para el conjunto de datos que 
+contiene outliers(subdata2), el grado del polinomio tiene que ser degree = 1,
+mientras que para el conjunto sin los outliers(subdata), el grado tiene que ser
+degree = 2. Los modelos con estos parámetros han tenido el menor RMSE.
+
+
+Vamos a ajustar la regresión LOESS para el conjunto de los datos sin los outliers:
+
+```{r message= FALSE, warning=FALSE}
+
+# Establecemos span=0.15 y degree=2
+mod <- loess(calories ~ protein+fat+sodium, data = train, degree = 2, 
+             span = 0.15, normalize = T, 
+             control = loess.control(surface = "direct"))
+
+summary(mod)
+
+train.rmse <- calc.RMSE(mod$fitted, train$calories)
+valid.rmse <- calc.RMSE(predict(mod, newdata = valid), valid$calories)
+
+train.rmse
+valid.rmse
+
+```
+
+
+Ajustamos otra regresión sobre el conjunto de datos original que contiene los
+outliers(subdata2):
+
+
+```{r message= FALSE, warning=FALSE}
+
+# Establecemos span=0.15 y degree=1
+mod2 <- loess(calories ~ protein+fat+sodium, data = train2, degree = 1, 
+             span = 0.15, normalize = T, 
+             control = loess.control(surface = "direct"))
+
+summary(mod2)
+
+train2.rmse <- calc.RMSE(mod2$fitted, train2$calories)
+valid2.rmse <- calc.RMSE(predict(mod2, newdata = valid2), valid2$calories)
+
+train2.rmse
+valid2.rmse
+
+```
+
+
+
+Una vez estimados los modelos, podemos predecir la cantidad de calorías que 
+tendría una receta dados ciertos valores de los demás atributos.
+
+Hagamos una predicción de calorías de una receta con valor 27 en protein, 51 en 
+fat y 290 en sodium.
+
+Vamos a probar los dos modelos LOESS(con y sin outliers) y para satisfacer la
+curiosidad, vamos a probar el modelo de regresión lineal que hemos estimado
+anteriormente.
+
+```{r message= FALSE, warning=FALSE}
+
+pred <- data.frame(protein = 27, fat = 51, sodium = 290)
+
+# El modelo LOESS estimado sobre el conjunto de datos con los outliers
+predict(mod2, pred)
+
+# El modelo LOESS para los datos sin outliers
+predict(mod, pred)
+
+# Modelo de rgresión lineal
+predict(reg_lin_model2, pred)
+
+```
+
+
+Vemos que los tres modelos predicen aproximadamente el mismo resultado.
+
+
+Probamos con otros valores:
+
+```{r message= FALSE, warning=FALSE}
+
+
+pred <- data.frame(protein = 86, fat = 150, sodium = 290)
+
+# El modelo LOESS estimado sobre el conjunto de datos con los outliers
+predict(mod2, pred)
+
+# El modelo LOESS para los datos sin outliers
+predict(mod, pred)
+
+# Modelo de regresión lineal
+predict(reg_lin_model2, pred)
+
+
+```
+
+Vemos que los dos modelos, el primero que es LOESS estimado sobre el conjunto
+de datos con los outliers y el modelo de regresión lineal estimado sobre el
+conjunto sin outliers, muestran prácticamente el mismo resultado.
+
+
+Vamos a probar otra vez con otros valores:
+
+```{r message= FALSE, warning=FALSE}
+
+
+pred <- data.frame(protein = 132, fat = 210, sodium = 360)
+
+# El modelo LOESS estimado sobre el conjunto de datos con los outliers
+predict(mod2, pred)
+
+# El modelo LOESS para los datos sin outliers
+predict(mod, pred)
+
+# Modelo de regresión lineal
+predict(reg_lin_model2, pred)
+
+
+```
+
+Y otra vez podemos observar que el modelo LOESS con los outliers y el modelo
+de regresión lineal predicen los resultados muy cercanos. Aquí lo curioso es
+que un modelo está estimado sobre los datos con los outliers y el otro sin, además
+uno es paramétrico y el otro no, pero los dos predicen aproximadamente el mismo
+resultado.
+
+
+
+
+Vamos a estudiar las relaciones que tiene la variable de respuesta calories con
+las variables explicativas protein, fat y sodium por separado.
+
+Empezamos por calories ~ protein.
+
+Para esto, vamos a estimar el modelo con el span = 0.22 y degree = 1, los 
+parámetros óptimos hallados previamente con el mismo procedimiento descrito 
+anteriormente.
+
+
+```{r message= FALSE, warning=FALSE}
+
+mod_prot <- loess(calories ~ protein, data = train, degree = 1, 
+             span = 0.22, normalize = T, 
+             control = loess.control(surface = "direct"))
+
+#summary(mod_prot)
+
+train.rmse <- calc.RMSE(mod_prot$fitted, train$calories)
+valid.rmse <- calc.RMSE(predict(mod_prot, newdata = valid), valid$calories)
+
+train.rmse
+valid.rmse
+
+
+
+```
+
+
+
+
+
+Ajustamos la regresión calories ~ fat
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+mod_fat <- loess(calories ~ fat, data = train, degree = 2, 
+             span = 0.26, normalize = T, 
+             control = loess.control(surface = "direct"))
+
+#summary(mod_fat)
+
+train.rmse <- calc.RMSE(mod_fat$fitted, train$calories)
+valid.rmse <- calc.RMSE(predict(mod_fat, newdata = valid), valid$calories)
+
+train.rmse
+valid.rmse
+
+
+
+```
+
+
+
+
+Ajustamos la regresión calories ~ sodium
+
+
+```{r message= FALSE, warning=FALSE}
+
+mod_sod <- loess(calories ~ sodium, data = train, degree = 2, 
+             span = 0.26, normalize = T, 
+             control = loess.control(surface = "direct"))
+
+#summary(mod_sod)
+
+train.rmse <- calc.RMSE(mod_sod$fitted, train$calories)
+valid.rmse <- calc.RMSE(predict(mod_sod, newdata = valid), valid$calories)
+
+train.rmse
+valid.rmse
+
+
+
+```
+
+
+
+
+
+Ahora, vamos a representar gráficamente las relaciones entre la variable calories
+con las variables protein, fat y sodium.
+
+
+```{r message= FALSE, warning=FALSE}
+
+y_prot.pred <- predict(mod_prot)
+y_fat.pred <- predict(mod_fat)
+y_sod.pred <- predict(mod_sod)
+
+
+par(mfrow = c(2, 2))
+
+rk_pr <- order(train$protein)
+rk_sod <- order(train$sodium)
+rk_fat <- order(train$fat)
+
+plot(train$protein, train$calories, type="p",main="calories ~ protein")
+
+lines(train$protein[rk_pr],y_prot.pred[rk_pr],col="red",lwd=2)
+
+
+
+
+plot(train$sodium, train$calories, type="p",main="calories ~ sodium")
+
+lines(train$sodium[rk_sod],y_sod.pred[rk_sod],col="red",lwd=2)
+
+
+
+plot(train$fat, train$calories, type="p",main="calories ~ fat")
+
+lines(train$fat[rk_fat],y_fat.pred[rk_fat],col="red",lwd=2)
+
+
+```
+
+
+
+Bueno pues, aquí podemos ver las relaciones que la regresión LOESS ha podido
+estimar. Desde luego, no son lineales. La relación calories ~ sodium por ejemplo,
+se parece bastante a la función $\sqrt{x}$. Lo bueno de la regresión LOESS es 
+que nos permite observar las tendencias en los datos cuando éstos son difíciles 
+de modelar mediante curvas paramétricas y no necesita que especifiquemos una 
+función para ajustar el modelo.
+
+
+
+
+
+
+
+
+
+
+# REPRESENTACIÓN DE LOS RESULTADOS A PARTIR DE TABLAS Y GRÁFICAS
+
+
+
+
+
+¿La comida vegetariana es más baja en grasas y proteínas?
+
+
+Creamos nuevos atributos llamados low_fat y low_protein.
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+# De base, definimos vectores de ceros
+  
+low_fat = rep(0,dim(subdata)[1])
+low_protein = rep(0,dim(subdata)[1])
+  
+# Rellenémoslos
+  
+low_fat[subdata$fat < 0.05] = 1
+low_protein[subdata$protein < 0.05] = 1
+  
+# Añadimos estos datos al dataframe
+  
+subdata_plus <- cbind(subdata, low_fat, low_protein)
+head(subdata_plus,10)
+  
+# Definimos los dos vectores que nos determinarán de qué tipo son cada una a partir de nuestro dataset1
+  
+isveg = rep("NoVeg",dim(subdata)[1])
+isveg[subdata$vegetarian == 1] = "Veg"
+
+
+
+subdata_plus <- cbind(subdata_plus, isveg)
+
+subdata_plus$lfat <- ifelse(subdata_plus$low_fat==1, "Low_Fat", "Not_Low_Fat")
+
+# Representamos
+  
+ggplot(data=subdata_plus)+geom_bar(mapping = aes(x=subdata_plus$isveg, fill=as.factor(lfat)))
+
+
+
+```
+
+
+
+¿La comida vegetariana está relacionada con lo saludable?
+
+
+```{r message= FALSE, warning=FALSE}
+
+ishealthy = rep("NoHealthy",dim(subdata_plus)[1])
+ishealthy[subdata_plus$healthy == 1] = "Healthy"
+
+
+ggplot(data=subdata_plus[1:dim(subdata_plus)[1],],mapping = aes(x=isveg, fill=ishealthy))+geom_bar(position="fill")
+
+```
+
+En este caso, observamos claramente que la mayoría de las recetas no son 
+saludables en absoluto, pero en el caso de las recetas vegetarianas, el 
+porcentaje de saludables, supera el doble al de no vegetarianas.
+  
+  
+  
+¿Existe alguna relación entre los valores nutritivos? 
+  
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+# Representamos una tabla-gráfico con los resultados de correlación
+  
+
+chart.Correlation(subdata[,2:5], histogram = F, pch = 19)
+
+
+```
+
+
+
+
+  
+
+
+
+
+
+
+
+# RESOLUCIÓN DEL PROBLEMA
+
+
+
+
+
+*A partir de los resultados obtenidos, ¿cuáles son las conclusiones?*
+
+
+
+Se han realizado diferentes test y pruebas sobre los registros y atributos del 
+dataset original. Se ha hecho un profundo ejercicio de ETL obteniendo un dataset 
+mejor preparado para responder a las preguntas que previamente nos habíamos 
+formulado:
+
+
+
+*¿La comida vegetariana es más baja en grasas y proteínas?*
+
+
+
+En vista de las gráficas, podemos observar que la comida vegetariana no es 
+especialmente más baja en grasas pero sí lo es en proteínas. Así mismo, los test 
+estadísticos utilizados nos confirman lo que se ve gráficamente, y es que la 
+cantidad de grasas es muy poco menor en la comida vegetariana, pero, la cantidad 
+de proteínas es más significativamente menor.
+
+
+
+*¿La comida vegetariana está relacionada con lo saludable?*
+
+
+
+
+Gráficamente, se observa que la comida vegetariana está etiquetada como saludable 
+aproximadamente el doble de veces que la no vegetariana. Sin embargo, el estudio 
+analítico realizado, nos dice justamente lo contrario, de hecho, la correlación 
+es próxima a cero.
+
+
+
+
+*¿Existe alguna relación entre los valores nutritivos? *
+
+
+
+En este caso, hemos visto que las calorías están más relacionadas con la grasa 
+que con el resto de valores nutritivos, mientras que las proteínas lo es de 
+manera débil y el sodio no tiene aparentemente relación. Todas estas relaciones 
+son directas, es decir, que cuanto más de una, más de la otra en mayor o menor 
+medida.
+
+
+
+
+
+*¿Podemos predecir la cantidad de calorías que tendría una receta dados ciertos valores de los demás atributos?*
+
+Si nos agarramos a lo que dice la teoría sobre los supuestos que deben cumplirse
+para que el modelo de regresión lineal sea válido, pues no deberíamos utilizar
+este modelo para hacer predicciones, ya que no se cumple uno de los supuestos
+de normalidad de residuos, por lo que sus predicciones no serían muy fiables y en
+lugar de utilizar el modelo paramétrico, tenemos que recurrir a los modelos 
+no paramétricos, como es LOESS.
+
+Pero también hemos podido observar que aunque el modelo de regresión lineal no
+debería de utilizarse, predice los resultados bastante similares al modelo LOESS.
+
+
+
+
+
+*¿Los resultados permiten responder al problema?*
+
+
+
+
+En general, podríamos decir que sí.
+
+
+- Hemos conseguido confirmar o desmentir algunos de los mitos sobre la comida 
+vegetariana, pero tenemos dudas sobre lo saludable de la misma, ya que hemos 
+obtenido resultados polares.
+  
+- Hemos encontrado que, al menos en nuestra muestra, que cuanta más grasa tenga 
+un alimento, más calorías tiene. Eso es algo que parecía razonable, pero tenemos 
+un respaldo analítico.
+
+- Hemos podido realizar pronósticos de la cantidad de calorías de un registro 
+a partir del resto de valores nutritivos. 
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+```
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+```
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+pred <- data.frame(protein = 27, fat = 51, sodium = 290, healthy = 0, vegetarian = 0)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r message= FALSE, warning=FALSE}
+
+
+
+```
