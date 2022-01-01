@@ -1,0 +1,10 @@
+Título: Epicurious - Recipes with Rating and Nutrition
+
+Subtítulo: Recipes from Epicurious by rating, nutritional content, and categories
+
+Visibilidad: público
+
+Dueño del set de datos: HugoDarwood
+
+
+Link al dataset: https://www.kaggle.com/hugodarwood/epirecipes
