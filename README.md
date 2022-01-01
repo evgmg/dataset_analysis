@@ -28,17 +28,17 @@ Dueño del set de datos: HugoDarwood<br>
 Link al dataset: https://www.kaggle.com/hugodarwood/epirecipes<br>
 
 
-2) <b>Archivos csv</b><br>
+2) <b>Archivo csv</b><br>
 Dataframes en formato csv:<br>
 
 epi_r-clean.csv: Dataframe con los datos del dataset tras la limpieza<br>
 
-3) <b>Archivos rmd</b><br>
+3) <b>Archivo rmd</b><br>
 Archivos rmarkdown:<br>
 
 Practica_2.Rmd: Fichero con el código y los comentarios respondiendo a las cuestiones de la práctica.
 
-4) <b>Archivos HTML</b><br>
+4) <b>Archivo HTML</b><br>
 Archivos en formato HTML:<br>
 
 Practica_2.html: Version HTML del fichero rmd, con el fin de mostrar los resultados tanto del código como de las cuestiones de la práctica en formato web.
