@@ -1,4 +1,4 @@
-# Práctica 1: Dataset_analysis
+# Práctica 2: Dataset_analysis
 
 Este proyecto es una práctica realizada por:<br>
 
